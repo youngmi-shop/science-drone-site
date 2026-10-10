@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>과학드론 교구</title>
+    <link>https://science-drone-site.vercel.app/</link>
+    <description>학교 선생님과 방과후 강사를 위한 초·중·고 과학드론 교구 도입 문의 사이트</description>
+    <language>ko-KR</language>
+    <lastBuildDate>Sun, 11 Oct 2026 00:00:00 +0900</lastBuildDate>
+    <atom:link href="https://science-drone-site.vercel.app/rss.xml" rel="self" type="application/rss+xml"/>
+    <!-- 새 소식·교구 안내 글이 생기면 아래에 <item>을 맨 위로 더한다 -->
+    <item>
+      <title>초·중·고 과학드론 교구 | 학교·방과후 드론 수업 도입 문의</title>
+      <link>https://science-drone-site.vercel.app/</link>
+      <guid isPermaLink="true">https://science-drone-site.vercel.app/</guid>
+      <description>학교 선생님과 방과후 강사를 위한 초·중·고 과학드론 교구. 가격, 수업 자료, 구매 방법을 문의해 주세요.</description>
+      <pubDate>Sun, 11 Oct 2026 00:00:00 +0900</pubDate>
+    </item>
+  </channel>
+</rss>
