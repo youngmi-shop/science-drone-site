@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>문의함 — 과학드론 교구</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --night: #151036; --panel: #211a4a; --line: #3a3270; --violet: #9c80ff; --cyan: #72e0e6; --text: #eeebf8; --muted: #aba5cc; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--night); color: var(--text); font: 400 16px/1.6 "IBM Plex Sans KR", system-ui, sans-serif; word-break: keep-all; }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 24px; }
+  input[type=password] { width: 100%; min-height: 52px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font: inherit; }
+  button { font: 600 16px "IBM Plex Sans KR", sans-serif; min-height: 48px; padding: 0 20px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
+  .primary { background: var(--text); color: var(--night); border: 0; width: 100%; margin-top: 12px; }
+  .err { color: #ffb4c0; min-height: 1.6em; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .count { font-size: 15px; color: var(--muted); }
+  .count strong { display: block; font-size: 44px; line-height: 1.1; color: var(--text); font-weight: 600; }
+  .list { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .item { background: var(--panel); border-radius: 16px; padding: 18px; border: 1px solid transparent; }
+  .item.new { border-color: var(--violet); }
+  .meta { color: var(--muted); font-size: 14px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .kind { color: var(--cyan); font-weight: 500; }
+  .name { font-size: 18px; font-weight: 600; margin: 6px 0 2px; }
+  .contact { background: none; border: 0; padding: 0; min-height: 40px; color: var(--text); text-decoration: underline; text-underline-offset: 4px; font-weight: 400; }
+  .org { color: var(--muted); }
+  .states { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+  .states button { padding: 0 8px; }
+  .states button[aria-pressed=true] { background: var(--violet); border-color: var(--violet); color: var(--night); }
+  .empty { color: var(--muted); text-align: center; padding: 48px 0; }
+</style>
+</head>
+<body>
+<main>
+  <section id="login">
+    <h1>문의함</h1>
+    <form id="loginForm">
+      <label for="pw">관리자 비밀번호</label>
+      <input type="password" id="pw" autocomplete="current-password" required>
+      <button class="primary" type="submit">들어가기</button>
+      <p class="err" id="loginErr" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="box" hidden>
+    <div class="head">
+      <div class="count">새 문의<strong id="newCount">0</strong></div>
+      <div>
+        <button type="button" id="reload">새로고침</button>
+        <button type="button" id="logout">나가기</button>
+      </div>
+    </div>
+    <p class="err" id="boxErr" role="alert"></p>
+    <ul class="list" id="list"></ul>
+  </section>
+</main>
+
+<script>
+  const STATUSES = ['새 문의', '연락함', '완료'];
+  const $ = (id) => document.getElementById(id);
+  const getPw = () => sessionStorage.getItem('adminPw') || '';
+
+  async function api(method, body) {
+    const r = await fetch('/api/admin', {
+      method,
+      headers: { 'x-admin-password': getPw(), 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.status === 401) { showLogin('비밀번호가 맞지 않아요.'); throw new Error(''); }
+    if (!r.ok) throw new Error(data.error || '불러오지 못했어요.');
+    return data;
+  }
+
+  function showLogin(message) {
+    sessionStorage.removeItem('adminPw');
+    $('box').hidden = true; $('login').hidden = false;
+    $('loginErr').textContent = message || '';
+    $('pw').value = ''; $('pw').focus();
+  }
+
+  const fmt = (s) => new Date(s).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  function render(rows) {
+    $('newCount').textContent = rows.filter((r) => r.status === '새 문의').length;
+    const list = $('list');
+    list.textContent = '';
+    if (!rows.length) { list.innerHTML = '<li class="empty">아직 들어온 문의가 없어요.</li>'; return; }
+    for (const row of rows) {
+      const li = document.createElement('li');
+      li.className = 'item' + (row.status === '새 문의' ? ' new' : '');
+      const meta = document.createElement('div'); meta.className = 'meta';
+      const kind = document.createElement('span'); kind.className = 'kind'; kind.textContent = row.kind || '';
+      const date = document.createElement('span'); date.textContent = fmt(row.created_at);
+      meta.append(kind, date);
+      const name = document.createElement('div'); name.className = 'name'; name.textContent = row.name;
+      const contact = document.createElement('button'); contact.type = 'button'; contact.className = 'contact'; contact.textContent = row.contact;
+      contact.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(row.contact); contact.textContent = row.contact + ' (복사했어요)'; setTimeout(() => (contact.textContent = row.contact), 1500); }
+        catch { const s = getSelection(); const rg = document.createRange(); rg.selectNodeContents(contact); s.removeAllRanges(); s.addRange(rg); }
+      });
+      const org = document.createElement('div'); org.className = 'org'; org.textContent = row.org || '소속 없음';
+      const states = document.createElement('div'); states.className = 'states';
+      for (const st of STATUSES) {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = st;
+        b.setAttribute('aria-pressed', String(row.status === st));
+        b.addEventListener('click', async () => {
+          if (row.status === st) return;
+          try { await api('PATCH', { id: row.id, status: st }); load(); } catch (e) { if (e.message) $('boxErr').textContent = e.message; }
+        });
+        states.append(b);
+      }
+      li.append(meta, name, contact, org, states);
+      list.append(li);
+    }
+  }
+
+  async function load() {
+    $('boxErr').textContent = '';
+    try {
+      const { rows } = await api('GET');
+      $('login').hidden = true; $('box').hidden = false;
+      render(rows);
+    } catch (e) { if (e.message) { $('login').hidden = true; $('box').hidden = false; $('boxErr').textContent = e.message; } }
+  }
+
+  $('loginForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    sessionStorage.setItem('adminPw', $('pw').value);
+    $('loginErr').textContent = '';
+    load();
+  });
+  $('reload').addEventListener('click', load);
+  $('logout').addEventListener('click', () => showLogin(''));
+  if (getPw()) load(); else $('pw').focus();
+</script>
+</body>
+</html>
