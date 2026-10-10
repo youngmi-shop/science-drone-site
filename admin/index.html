@@ -35,6 +35,20 @@
   .states button { padding: 0 8px; }
   .states button[aria-pressed=true] { background: var(--violet); border-color: var(--violet); color: var(--night); }
   .empty { color: var(--muted); text-align: center; padding: 48px 0; }
+  .src { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .src b { color: var(--text); font-weight: 500; }
+  .panel { background: var(--panel); border-radius: 16px; padding: 18px; margin-bottom: 16px; }
+  .panel h2 { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+  .bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .bars li { display: grid; grid-template-columns: 7.5em 1fr 2.5em; gap: 10px; align-items: center; font-size: 15px; }
+  .bars .bar { height: 10px; border-radius: 5px; background: var(--violet); min-width: 4px; }
+  .bars .n { text-align: right; color: var(--muted); }
+  details.panel summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+  .builder { display: grid; gap: 12px; margin-top: 12px; }
+  .builder label { display: grid; gap: 6px; font-size: 15px; }
+  .builder select, .builder input { min-height: 48px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--night); color: var(--text); font: inherit; }
+  .out { word-break: break-all; background: var(--night); border-radius: 10px; padding: 12px; font-size: 14px; color: var(--cyan); }
+  .hint { color: var(--muted); font-size: 14px; margin: 0; }
 </style>
 </head>
 <body>
@@ -58,6 +72,34 @@
       </div>
     </div>
     <p class="err" id="boxErr" role="alert"></p>
+
+    <section class="panel" id="sources" hidden>
+      <h2>어디서 와서 문의했나요</h2>
+      <ul class="bars" id="bars"></ul>
+    </section>
+
+    <details class="panel">
+      <summary>추적 링크 만들기 (UTM)</summary>
+      <div class="builder">
+        <label>어디에 올릴 링크인가요?
+          <select id="bSource">
+            <option value="instagram|social">인스타그램</option>
+            <option value="youtube|video">유튜브</option>
+            <option value="naver_blog|blog">네이버 블로그</option>
+            <option value="qr|offline">연수·박람회 QR 코드</option>
+            <option value="kakao|message">카카오톡 공유</option>
+            <option value="email|email">이메일·공문</option>
+          </select>
+        </label>
+        <label>행사나 게시물 이름 <span class="hint">(영문·숫자, 예: 2026_fall_expo)</span>
+          <input type="text" id="bCampaign" autocomplete="off" maxlength="60">
+        </label>
+        <div class="out" id="bOut"></div>
+        <button type="button" id="bCopy">링크 복사</button>
+        <p class="hint">이 링크로 들어와 30일 안에 문의하면, 위 목록과 문의 카드에 어디서 왔는지 표시돼요.</p>
+      </div>
+    </details>
+
     <ul class="list" id="list"></ul>
   </section>
 </main>
@@ -88,8 +130,37 @@
 
   const fmt = (s) => new Date(s).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+  const SOURCE_NAMES = { instagram: '인스타그램', youtube: '유튜브', naver_blog: '네이버 블로그', qr: '연수·박람회 QR', kakao: '카카오톡', email: '이메일·공문' };
+  // 문의 한 건이 어디서 왔는지 사람이 읽는 이름으로
+  function sourceOf(row) {
+    if (row.utm_source) return SOURCE_NAMES[row.utm_source] || row.utm_source;
+    if (row.referrer) {
+      if (/naver\./.test(row.referrer)) return '네이버 검색·유입';
+      if (/google\./.test(row.referrer)) return '구글 검색';
+      return row.referrer;
+    }
+    return '직접 방문·알 수 없음';
+  }
+
+  function renderSources(rows) {
+    const counts = {};
+    for (const r of rows) { const s = sourceOf(r); counts[s] = (counts[s] || 0) + 1; }
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    $('sources').hidden = !entries.length;
+    const max = Math.max(1, ...entries.map((e) => e[1]));
+    const bars = $('bars'); bars.textContent = '';
+    for (const [name, n] of entries) {
+      const li = document.createElement('li');
+      const label = document.createElement('span'); label.textContent = name;
+      const bar = document.createElement('span'); bar.className = 'bar'; bar.style.width = (n / max * 100) + '%';
+      const num = document.createElement('span'); num.className = 'n'; num.textContent = n + '건';
+      li.append(label, bar, num); bars.append(li);
+    }
+  }
+
   function render(rows) {
     $('newCount').textContent = rows.filter((r) => r.status === '새 문의').length;
+    renderSources(rows);
     const list = $('list');
     list.textContent = '';
     if (!rows.length) { list.innerHTML = '<li class="empty">아직 들어온 문의가 없어요.</li>'; return; }
@@ -117,7 +188,11 @@
         });
         states.append(b);
       }
-      li.append(meta, name, contact, org, states);
+      const src = document.createElement('div'); src.className = 'src';
+      const srcName = document.createElement('b'); srcName.textContent = sourceOf(row);
+      src.append('유입: ', srcName);
+      if (row.utm_campaign) src.append(' · ' + row.utm_campaign);
+      li.append(meta, name, contact, org, src, states);
       list.append(li);
     }
   }
@@ -137,6 +212,24 @@
     $('loginErr').textContent = '';
     load();
   });
+  function buildLink() {
+    const [source, medium] = $('bSource').value.split('|');
+    const campaign = $('bCampaign').value.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/g, '');
+    const u = new URL('/', location.origin);
+    u.searchParams.set('utm_source', source);
+    u.searchParams.set('utm_medium', medium);
+    if (campaign) u.searchParams.set('utm_campaign', campaign);
+    $('bOut').textContent = u.toString();
+  }
+  $('bSource').addEventListener('change', buildLink);
+  $('bCampaign').addEventListener('input', buildLink);
+  $('bCopy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('bOut').textContent); $('bCopy').textContent = '복사했어요'; }
+    catch { const s = getSelection(); const rg = document.createRange(); rg.selectNodeContents($('bOut')); s.removeAllRanges(); s.addRange(rg); $('bCopy').textContent = '선택했어요. 복사해 주세요'; }
+    setTimeout(() => ($('bCopy').textContent = '링크 복사'), 1800);
+  });
+  buildLink();
+
   $('reload').addEventListener('click', load);
   $('logout').addEventListener('click', () => showLogin(''));
   if (getPw()) load(); else $('pw').focus();

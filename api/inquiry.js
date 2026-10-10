@@ -21,6 +21,11 @@ module.exports = async (req, res) => {
     org: clip(b.org, 100),
     consent: b.consent === true,
   };
+  // 유입 경로 (비어 있으면 저장하지 않는다)
+  for (const k of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'referrer', 'landing']) {
+    const v = clip(b[k], 100);
+    if (v) row[k] = v;
+  }
   if (!row.name || !row.contact) return res.status(400).json({ error: '이름과 연락처를 적어 주세요' });
   if (!row.consent) return res.status(400).json({ error: '개인정보 수집·이용에 동의해 주세요' });
   const r = await fetch(`${SB_URL}/rest/v1/inquiries`, { method: 'POST', headers: { ...sbHeaders(), Prefer: 'return=minimal' }, body: JSON.stringify(row) });
