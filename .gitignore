@@ -1,3 +1,8 @@
 .env*
 .vercel
 node_modules
+
+# Vercel CLI가 자동으로 만든 에이전트 안내 파일 (사이트와 무관)
+.agents
+.claude
+skills-lock.json
